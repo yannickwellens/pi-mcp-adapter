@@ -9,6 +9,7 @@ import { transformMcpContent } from "./tool-registrar.js";
 import { maybeStartUiSession, type UiSessionRuntime } from "./ui-session.js";
 import { formatToolName } from "./types.js";
 import { resourceNameToToolName } from "./resource-tools.js";
+import { logger } from "./logger.js";
 
 const BUILTIN_NAMES = new Set(["read", "bash", "edit", "write", "grep", "find", "ls", "mcp"]);
 
@@ -70,11 +71,11 @@ export function resolveDirectTools(
       if (toolFilter !== true && !toolFilter.includes(tool.name)) continue;
       const prefixedName = formatToolName(tool.name, serverName, prefix);
       if (BUILTIN_NAMES.has(prefixedName)) {
-        console.warn(`MCP: skipping direct tool "${prefixedName}" (collides with builtin)`);
+        logger.warn(`Skipping direct tool "${prefixedName}" (collides with builtin)`);
         continue;
       }
       if (seenNames.has(prefixedName)) {
-        console.warn(`MCP: skipping duplicate direct tool "${prefixedName}" from "${serverName}"`);
+        logger.warn(`Skipping duplicate direct tool "${prefixedName}" from "${serverName}"`);
         continue;
       }
       seenNames.add(prefixedName);
@@ -95,11 +96,11 @@ export function resolveDirectTools(
         if (toolFilter !== true && !toolFilter.includes(baseName)) continue;
         const prefixedName = formatToolName(baseName, serverName, prefix);
         if (BUILTIN_NAMES.has(prefixedName)) {
-          console.warn(`MCP: skipping direct resource tool "${prefixedName}" (collides with builtin)`);
+          logger.warn(`Skipping direct resource tool "${prefixedName}" (collides with builtin)`);
           continue;
         }
         if (seenNames.has(prefixedName)) {
-          console.warn(`MCP: skipping duplicate direct resource tool "${prefixedName}" from "${serverName}"`);
+          logger.warn(`Skipping duplicate direct resource tool "${prefixedName}" from "${serverName}"`);
           continue;
         }
         seenNames.add(prefixedName);

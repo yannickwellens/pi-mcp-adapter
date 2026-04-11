@@ -63,7 +63,7 @@ export class McpLifecycleManager {
           // Notify extension to update metadata
           this.onReconnect?.(name);
         } catch (error) {
-          console.error(`MCP: Failed to reconnect to ${name}:`, error);
+          logger.error(`Failed to reconnect to ${name}`, error instanceof Error ? error : new Error(String(error)));
         }
       }
     }

@@ -124,16 +124,16 @@ export class McpServerManager {
   private async createHttpTransport(definition: ServerDefinition, serverName?: string): Promise<Transport> {
     const url = new URL(definition.url!);
     const headers = resolveHeaders(definition.headers) ?? {};
-    
+
     // Add bearer token if configured
     if (definition.auth === "bearer") {
-      const token = definition.bearerToken 
+      const token = definition.bearerToken
         ?? (definition.bearerTokenEnv ? process.env[definition.bearerTokenEnv] : undefined);
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;
       }
     }
-    
+
     // Handle OAuth auth - use stored tokens
     if (definition.auth === "oauth") {
       if (!serverName) {
@@ -147,28 +147,55 @@ export class McpServerManager {
       }
       headers["Authorization"] = `Bearer ${tokens.access_token}`;
     }
-    
+
     const requestInit = Object.keys(headers).length > 0 ? { headers } : undefined;
-    
+    const logContext = {
+      server: serverName,
+      url: url.toString(),
+      auth: definition.auth ?? "none",
+      headerKeys: Object.keys(headers),
+    };
+
+    logger.debug("Probing HTTP MCP transport", logContext);
+
     // Try StreamableHTTP first (modern MCP servers)
     const streamableTransport = new StreamableHTTPClientTransport(url, { requestInit });
-    
+
     try {
-      // Create a test client to verify the transport works
       const testClient = new Client({ name: "pi-mcp-probe", version: "1.0.0" });
+      logger.debug("Trying StreamableHTTP probe", logContext);
       await testClient.connect(streamableTransport);
+      logger.info("StreamableHTTP probe succeeded", logContext);
       await testClient.close().catch(() => {});
-      // Close probe transport before creating fresh one
       await streamableTransport.close().catch(() => {});
-      
-      // StreamableHTTP works - create fresh transport for actual use
       return new StreamableHTTPClientTransport(url, { requestInit });
-    } catch {
-      // StreamableHTTP failed, close and try SSE fallback
+    } catch (streamableError) {
       await streamableTransport.close().catch(() => {});
-      
-      // SSE is the legacy transport
-      return new SSEClientTransport(url, { requestInit });
+      logger.warn(
+        `StreamableHTTP probe failed: ${formatUnknownError(streamableError)}`,
+        logContext,
+      );
+
+      const sseTransport = new SSEClientTransport(url, { requestInit });
+      try {
+        const testClient = new Client({ name: "pi-mcp-probe", version: "1.0.0" });
+        logger.debug("Trying SSE probe", logContext);
+        await testClient.connect(sseTransport);
+        logger.info("SSE probe succeeded; using SSE fallback", logContext);
+        await testClient.close().catch(() => {});
+        await sseTransport.close().catch(() => {});
+        return new SSEClientTransport(url, { requestInit });
+      } catch (sseError) {
+        await sseTransport.close().catch(() => {});
+        logger.error(
+          `HTTP transport probes failed. StreamableHTTP: ${formatUnknownError(streamableError)}. SSE: ${formatUnknownError(sseError)}`,
+          sseError instanceof Error ? sseError : new Error(String(sseError)),
+          logContext,
+        );
+        throw new Error(
+          `Failed to connect via HTTP transports. StreamableHTTP: ${formatUnknownError(streamableError)}. SSE: ${formatUnknownError(sseError)}`,
+        );
+      }
     }
   }
   
@@ -319,7 +346,7 @@ function resolveEnv(env?: Record<string, string>): Record<string, string> {
  */
 function resolveHeaders(headers?: Record<string, string>): Record<string, string> | undefined {
   if (!headers) return undefined;
-  
+
   const resolved: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     resolved[key] = value
@@ -327,4 +354,11 @@ function resolveHeaders(headers?: Record<string, string>): Record<string, string
       .replace(/\$env:(\w+)/g, (_, name) => process.env[name] ?? "");
   }
   return resolved;
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.stack ?? error.message;
+  }
+  return String(error);
 }

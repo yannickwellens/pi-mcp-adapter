@@ -1,7 +1,21 @@
 /**
  * Centralized logging for MCP UI operations.
  * Provides structured, contextual logs with levels.
+ * All output goes to /tmp/pi-mcp.log (normal) and /tmp/pi-mcp.err (errors).
  */
+
+import { appendFileSync } from "node:fs";
+
+const LOG_FILE = "/tmp/pi-mcp.log";
+const ERR_FILE = "/tmp/pi-mcp.err";
+
+function writeToFile(path: string, message: string): void {
+  try {
+    appendFileSync(path, message + "\n");
+  } catch {
+    // If we can't write to the log file, silently drop — never pollute stdout/stderr
+  }
+}
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -79,13 +93,10 @@ class Logger {
     const fullMessage = contextStr ? `${prefix} ${message} ${contextStr}` : `${prefix} ${message}`;
 
     if (level === "error") {
-      console.error(fullMessage, error ?? "");
-    } else if (level === "warn") {
-      console.warn(fullMessage);
-    } else if (level === "debug") {
-      console.debug(fullMessage);
+      const errStr = error ? ` ${error.stack ?? error.message ?? String(error)}` : "";
+      writeToFile(ERR_FILE, `${entry.timestamp.toISOString()} ${fullMessage}${errStr}`);
     } else {
-      console.log(fullMessage);
+      writeToFile(LOG_FILE, `${entry.timestamp.toISOString()} ${fullMessage}`);
     }
 
     // Custom handlers

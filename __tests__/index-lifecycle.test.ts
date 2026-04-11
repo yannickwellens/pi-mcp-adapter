@@ -23,6 +23,10 @@ const mocks = vi.hoisted(() => ({
   executeUiMessages: vi.fn(),
   getConfigPathFromArgv: vi.fn(() => undefined),
   truncateAtWord: vi.fn((text: string) => text),
+  loggerError: vi.fn(),
+  loggerWarn: vi.fn(),
+  loggerInfo: vi.fn(),
+  loggerDebug: vi.fn(),
 }));
 
 vi.mock("../init.js", () => ({
@@ -66,6 +70,15 @@ vi.mock("../proxy-modes.js", () => ({
 vi.mock("../utils.js", () => ({
   getConfigPathFromArgv: mocks.getConfigPathFromArgv,
   truncateAtWord: mocks.truncateAtWord,
+}));
+
+vi.mock("../logger.js", () => ({
+  logger: {
+    error: mocks.loggerError,
+    warn: mocks.loggerWarn,
+    info: mocks.loggerInfo,
+    debug: mocks.loggerDebug,
+  },
 }));
 
 function createDeferred<T>() {
@@ -170,25 +183,19 @@ describe("mcpAdapter session lifecycle", () => {
       throw new Error("status boom");
     });
 
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { default: mcpAdapter } = await import("../index.ts");
+    const { api, handlers } = createPi();
+    mcpAdapter(api);
 
-    try {
-      const { default: mcpAdapter } = await import("../index.ts");
-      const { api, handlers } = createPi();
-      mcpAdapter(api);
+    const sessionStart = handlers.get("session_start");
+    expect(sessionStart).toBeTypeOf("function");
 
-      const sessionStart = handlers.get("session_start");
-      expect(sessionStart).toBeTypeOf("function");
+    await sessionStart?.({}, {});
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
 
-      await sessionStart?.({}, {});
-      await Promise.resolve();
-      await Promise.resolve();
-      await new Promise((resolve) => setImmediate(resolve));
-
-      expect(consoleError).toHaveBeenCalledWith("MCP initialization failed:", expect.any(Error));
-    } finally {
-      consoleError.mockRestore();
-    }
+    expect(mocks.loggerError).toHaveBeenCalledWith("MCP initialization failed", expect.any(Error));
   });
 
 });

@@ -2,6 +2,7 @@ import type { ExtensionAPI, ToolInfo } from "@mariozechner/pi-coding-agent";
 import type { McpExtensionState } from "./state.js";
 import { Type } from "@sinclair/typebox";
 import { showStatus, showTools, reconnectServers, authenticateServer, openMcpPanel } from "./commands.js";
+import { logger } from "./logger.js";
 import { loadMcpConfig } from "./config.js";
 import { buildProxyDescription, createDirectToolExecutor, resolveDirectTools } from "./direct-tools.js";
 import { flushMetadataCache, initializeMcp, updateStatusBar } from "./init.js";
@@ -33,7 +34,7 @@ export default function mcpAdapter(pi: ExtensionAPI) {
       await currentState.lifecycle.gracefulShutdown();
     } catch (error) {
       if (flushError) {
-        console.error("MCP: graceful shutdown failed after metadata flush error", error);
+        logger.error("Graceful shutdown failed after metadata flush error", error instanceof Error ? error : new Error(String(error)));
       } else {
         throw error;
       }
@@ -86,7 +87,7 @@ export default function mcpAdapter(pi: ExtensionAPI) {
     try {
       await shutdownState(previousState, "session_restart");
     } catch (error) {
-      console.error("MCP: failed to shut down previous session state", error);
+      logger.error("Failed to shut down previous session state", error instanceof Error ? error : new Error(String(error)));
     }
 
     if (generation !== lifecycleGeneration) {
@@ -101,7 +102,7 @@ export default function mcpAdapter(pi: ExtensionAPI) {
         try {
           await shutdownState(nextState, "stale_session_start");
         } catch (error) {
-          console.error("MCP: failed to clean stale session state", error);
+          logger.error("Failed to clean stale session state", error instanceof Error ? error : new Error(String(error)));
         }
         return;
       }
@@ -116,7 +117,7 @@ export default function mcpAdapter(pi: ExtensionAPI) {
       if (initPromise !== promise && initPromise !== null) {
         return;
       }
-      console.error("MCP initialization failed:", err);
+      logger.error("MCP initialization failed", err instanceof Error ? err : new Error(String(err)));
       initPromise = null;
     });
   });
@@ -130,7 +131,7 @@ export default function mcpAdapter(pi: ExtensionAPI) {
     try {
       await shutdownState(currentState, "session_shutdown");
     } catch (error) {
-      console.error("MCP: session shutdown cleanup failed", error);
+      logger.error("Session shutdown cleanup failed", error instanceof Error ? error : new Error(String(error)));
     }
   });
 
