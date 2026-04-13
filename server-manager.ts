@@ -156,16 +156,12 @@ export class McpServerManager {
       headerKeys: Object.keys(headers),
     };
 
-    logger.debug("Probing HTTP MCP transport", logContext);
-
     // Try StreamableHTTP first (modern MCP servers)
     const streamableTransport = new StreamableHTTPClientTransport(url, { requestInit });
 
     try {
       const testClient = new Client({ name: "pi-mcp-probe", version: "1.0.0" });
-      logger.debug("Trying StreamableHTTP probe", logContext);
       await testClient.connect(streamableTransport);
-      logger.info("StreamableHTTP probe succeeded", logContext);
       await testClient.close().catch(() => {});
       await streamableTransport.close().catch(() => {});
       return new StreamableHTTPClientTransport(url, { requestInit });
@@ -179,9 +175,7 @@ export class McpServerManager {
       const sseTransport = new SSEClientTransport(url, { requestInit });
       try {
         const testClient = new Client({ name: "pi-mcp-probe", version: "1.0.0" });
-        logger.debug("Trying SSE probe", logContext);
         await testClient.connect(sseTransport);
-        logger.info("SSE probe succeeded; using SSE fallback", logContext);
         await testClient.close().catch(() => {});
         await sseTransport.close().catch(() => {});
         return new SSEClientTransport(url, { requestInit });
